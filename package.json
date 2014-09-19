@@ -1,0 +1,21 @@
+{
+  "name":         "json-parameterization",
+  "version":      "0.1.0",
+  "author":       "Jonas Finnemann Jensen <jopsen@gmail.com>",
+  "description":  "Parameterization of JSON structures",
+  "license":      "MIT",
+  "scripts": {
+    "test":       "mocha --ui tdd --reporter spec test.js"
+  },
+  "repository": {
+    "type":   "git",
+    "url":    "https://github.com/jonasfj/json-parameterization.git"
+  },
+  "dependencies": {
+    "lodash":                           "2.4.1",
+    "debug":                            "2.0.0"
+  },
+  "devDependencies": {
+    "mocha":                            "1.21.4"
+  }
+}
