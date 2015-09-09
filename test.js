@@ -64,6 +64,38 @@ suite('parameterize', function() {
                      "Predicted output wasn't matched!");
   });
 
+  test("Substitute objects in", function() {
+    var input = {
+      key1:       "{{param1}}",
+      key2:       "{{param2}}"
+    };
+    var params = {
+      param1:     {my: "dictionary"},
+      param2:     [1,2,3,4],
+    };
+    var output = {
+      key1:     {my: "dictionary"},
+      key2:     [1,2,3,4],
+    };
+    assert.deepEqual(parameterize(input, params), output,
+                     "Predicted output wasn't matched!");
+  });
+
+  test("Substitute objects in key (doesn't work)", function() {
+    var input = {
+      '{{param1}}':   "{{param2}}"
+    };
+    var params = {
+      param1:     {my: "dictionary"},
+      param2:     [1,2,3,4],
+    };
+    var output = {
+      "{{param1}}":     [1,2,3,4],
+    };
+    assert.deepEqual(parameterize(input, params), output,
+                     "Predicted output wasn't matched!");
+  });
+
   test("Modify string", function() {
     var input = {
       key1:     "{{'hello world' | to-upper}}",

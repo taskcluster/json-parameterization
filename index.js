@@ -27,52 +27,63 @@ var debug       = require('debug')('json-parameterization');
 /** Parameterize input with params */
 var parameterize = function(input, params) {
 
+  // Evaluate an expression
+  var evalExpr = function(expr, fallback) {
+    // Find parts of the expression
+    var parts = expr.split(/\|/);
+
+    var value = parts.shift();
+    // Check if first value is on a "string" format
+    var match = /\s*"([^"]*)"\s*|\s*'([^']*)'\s*/.exec(value);
+    if (match) {
+      value = match[1] || match[2] || '';
+    } else {
+      // Otherwise, trim and look up in parameters
+      var result = params[value.trim()];
+      if (result instanceof Function) {
+        // if it's a function then we call it, without parameters
+        value = result();
+      } else if (result !== undefined) {
+        // if it's defined we return the value substituted in
+        value = _.cloneDeep(result);
+      } else {
+        // If we didn't get a value, function or string
+        debug("Couldn't find parameter: '%s' used in '%s'",
+              value, expr);
+        return fallback;
+      }
+    }
+
+    // While there are parts of the expression remaining
+    while (parts.length > 0) {
+      // Find next part and trim it
+      var part = parts.shift().trim();
+      // Look up in params
+      var result = params[part];
+      if (result instanceof Function) {
+        // Modify value if we got a function
+        value = result(value);
+      } else {
+        // If we didn't get a function, then this is done
+        debug("Couldn't find modify: '%s' used in '%s'", part, expr);
+        return fallback;
+      }
+    }
+
+    // Return value
+    return value;
+  };
+
   // Parameterize a string
   var parameterizeString = function(str) {
+    // Handle special case where the entire string is an expression
+    if (/^{{[^}]+}}$/.test(str)) {
+      return evalExpr(str.substr(2, str.length - 4), str);
+    }
+
+    // Otherwise treat {{...}} as string interpolations
     return str.replace(/{{([^}]*)}}/g, function(originalText, expression) {
-      // Find parts of the expression
-      var parts = expression.split(/\|/);
-
-      var value = parts.shift();
-      // Check if first value is on a "string" format
-      var match = /\s*"([^"]*)"\s*|\s*'([^']*)'\s*/.exec(value);
-      if (match) {
-        value = match[1] || match[2] || '';
-      } else {
-        // Otherwise, trim and look up in parameters
-        var result = params[value.trim()];
-        if (result instanceof Function) {
-          // if it's a function then we call it, without parameters
-          value = result();
-        } else if (result !== undefined) {
-          // if it's defined we return the value substituted in
-          value = result;
-        } else {
-          // If we didn't get a value, function or string
-          debug("Couldn't find parameter: '%s' used in '%s'",
-                value, expression);
-          return originalText;
-        }
-      }
-
-      // While there are parts of the expression remaining
-      while (parts.length > 0) {
-        // Find next part and trim it
-        var part = parts.shift().trim();
-        // Look up in params
-        var result = params[part];
-        if (result instanceof Function) {
-          // Modify value if we got a function
-          value = result(value);
-        } else {
-          // If we didn't get a function, then this is done
-          debug("Couldn't find modify: '%s' used in '%s'", part, expression);
-          return originalText;
-        }
-      }
-
-      // Return value
-      return value;
+      return evalExpr(expression, originalText);
     });
   };
 
@@ -90,7 +101,11 @@ var parameterize = function(input, params) {
       }
       var clone = {};
       for(var k in obj) {
-        clone[parameterizeString(k)] = _.cloneDeep(obj[k], substitute);
+        var key = parameterizeString(k);
+        if (typeof(key) !== 'string') {
+          key = k;
+        }
+        clone[key] = _.cloneDeep(obj[k], substitute);
       }
       return clone;
     }
