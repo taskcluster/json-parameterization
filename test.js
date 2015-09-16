@@ -14,10 +14,10 @@ suite('parameterize', function() {
 
   test("String extraction", function() {
     var input = {
-      key1:     "{{'Hello World'}}",
-      key2:     "{{   'Hello World'   }}",
-      key3:     "{{\"Hello World\"}}",
-      key4:     "{{  \"Hello World\"   }}"
+      key1:     "${'Hello World'}",
+      key2:     "${   'Hello World'   }",
+      key3:     "${\"Hello World\"}",
+      key4:     "${  \"Hello World\"   }"
     };
     var params = {};
     var output = {
@@ -32,8 +32,8 @@ suite('parameterize', function() {
 
   test("Substitute strings in", function() {
     var input = {
-      key1:       "{{param1}}",
-      key2:       "{{param2}}"
+      key1:       "${param1}",
+      key2:       "${param2}"
     };
     var params = {
       param1:     "PAR1",
@@ -49,8 +49,8 @@ suite('parameterize', function() {
 
   test("Substitute functions in", function() {
     var input = {
-      key1:       "{{param1}}",
-      key2:       "{{param2}}"
+      key1:       "${param1()}",
+      key2:       "${param2()}"
     };
     var params = {
       param1:     function() { return "PAR1"; },
@@ -66,8 +66,8 @@ suite('parameterize', function() {
 
   test("Substitute objects in", function() {
     var input = {
-      key1:       "{{param1}}",
-      key2:       "{{param2}}"
+      key1:       {$eval: "param1"},
+      key2:       {$eval: "param2"}
     };
     var params = {
       param1:     {my: "dictionary"},
@@ -83,14 +83,14 @@ suite('parameterize', function() {
 
   test("Substitute objects in key (doesn't work)", function() {
     var input = {
-      '{{param1}}':   "{{param2}}"
+      '${param1}':   {$eval: "param2"}
     };
     var params = {
       param1:     {my: "dictionary"},
       param2:     [1,2,3,4],
     };
     var output = {
-      "{{param1}}":     [1,2,3,4],
+      "{param1}":     [1,2,3,4],
     };
     assert.deepEqual(parameterize(input, params), output,
                      "Predicted output wasn't matched!");
@@ -98,18 +98,18 @@ suite('parameterize', function() {
 
   test("Modify string", function() {
     var input = {
-      key1:     "{{'hello world' | to-upper}}",
-      key2:     "{{ 'hello world'   | to-upper   | to-lower  }}",
-      key3:     "{{   hi-var   | to-upper   |    to-lower  }}",
+      key1:     "${ toUpper( 'hello world') }",
+      key2:     "${  toLower(toUpper('hello world'))   }",
+      key3:     "${   toLower(  toUpper(  text))  }",
     };
     var params = {
-      'to-upper': function(text) {
+      toUpper: function(text) {
         return text.toUpperCase();
       },
-      'to-lower': function(text) {
+      toLower: function(text) {
         return text.toLowerCase();
       },
-      'hi-var':   'hello World'
+      text: 'hello World'
     };
     var output = {
       key1:     "HELLO WORLD",
@@ -122,7 +122,7 @@ suite('parameterize', function() {
 
   test("Substitute into a key", function() {
     var input = {
-      "{{prefix}}Key": "Value"
+      "${prefix}Key": "Value"
     };
     var params = {
       'prefix':     'Some'

@@ -22,90 +22,119 @@
 
 var _           = require('lodash');
 var debug       = require('debug')('json-parameterization');
+var safeEval    = require('notevil');
+var vm          = require('vm');
 
+/** Evaluate an expression in a given context, using two sand boxes :) */
+var evalExpr = function(expr, context) {
+  if (typeof(expr) !== 'string') {
+    return expr;
+  }
+  context = _.cloneDeep(context);
+  var result  = undefined;
+  var error   = undefined;
+  // Let's use two sandboxes for good measure
+  vm.runInNewContext("run()", {
+    run: function() {
+      try {
+        result = safeEval(expr, context);
+      } catch (err) {
+        error = err || null;
+      }
+    },
+  }, {
+    displayErrors:  false,
+    timeout:        500
+  });
+
+  // Throw error if it's not undefined
+  if (error !== undefined) {
+    throw error;
+  }
+
+  return result;
+};
 
 /** Parameterize input with params */
 var parameterize = function(input, params) {
 
-  // Evaluate an expression
-  var evalExpr = function(expr, fallback) {
-    // Find parts of the expression
-    var parts = expr.split(/\|/);
-
-    var value = parts.shift();
-    // Check if first value is on a "string" format
-    var match = /\s*"([^"]*)"\s*|\s*'([^']*)'\s*/.exec(value);
-    if (match) {
-      value = match[1] || match[2] || '';
-    } else {
-      // Otherwise, trim and look up in parameters
-      var result = params[value.trim()];
-      if (result instanceof Function) {
-        // if it's a function then we call it, without parameters
-        value = result();
-      } else if (result !== undefined) {
-        // if it's defined we return the value substituted in
-        value = _.cloneDeep(result);
-      } else {
-        // If we didn't get a value, function or string
-        debug("Couldn't find parameter: '%s' used in '%s'",
-              value, expr);
-        return fallback;
-      }
-    }
-
-    // While there are parts of the expression remaining
-    while (parts.length > 0) {
-      // Find next part and trim it
-      var part = parts.shift().trim();
-      // Look up in params
-      var result = params[part];
-      if (result instanceof Function) {
-        // Modify value if we got a function
-        value = result(value);
-      } else {
-        // If we didn't get a function, then this is done
-        debug("Couldn't find modify: '%s' used in '%s'", part, expr);
-        return fallback;
-      }
-    }
-
-    // Return value
-    return value;
-  };
-
   // Parameterize a string
   var parameterizeString = function(str) {
-    // Handle special case where the entire string is an expression
-    if (/^{{[^}]+}}$/.test(str)) {
-      return evalExpr(str.substr(2, str.length - 4), str);
-    }
-
-    // Otherwise treat {{...}} as string interpolations
-    return str.replace(/{{([^}]*)}}/g, function(originalText, expression) {
-      return evalExpr(expression, originalText);
+    // Otherwise treat ${,..} as string interpolations
+    return str.replace(/\${([^}]*)}/g, function(originalText, expr) {
+      try {
+        var result = evalExpr(expr, params);
+        if (result === undefined) {
+          return '';
+        }
+      } catch (err) {
+        // Signal errors by returning originalText
+        return originalText;
+      }
     });
   };
 
   // Substitute objects that needs this
   var substitute = function(obj) {
     // Parameterized strings
-    if (typeof(obj) == 'string') {
+    if (typeof(obj) === 'string') {
       return parameterizeString(obj);
     }
 
+    // Parameterize array entries
+    if (obj instanceof Array) {
+      // Parameterize array and filter undefined entries
+      return _.cloneDeep(obj[k], substitute).filter(function(entry) {
+        return entry !== undefined;
+      });
+    }
+
     // Parameterize keys of objects
-    if (typeof(obj) == 'object') {
-      if (obj instanceof Array) {
-        return undefined;
+    if (typeof(obj) === 'object') {
+      // Handle if-constructs
+      if (typeof(obj['$if']) === 'string') {
+        try {
+          if (evalExpr(obj['$if'], params)) {
+            return _.cloneDeep(obj['then'], substitute);
+          } else {
+            return _.cloneDeep(obj['else'], substitute);
+          }
+        } catch (err) {
+          // Ignore error, and clone the $if object as a signal
+        }
       }
+      // Handle switch-constructs
+      if (typeof(obj['$switch']) === 'string') {
+        try {
+          var label = evalExpr(obj['$switch'], params);
+          return _.cloneDeep(obj[label], substitute);
+        } catch (err) {
+          // Ignore error, and clone the $switch object as a signal
+        }
+      }
+      // Handle eval-constructs
+      if (typeof(obj['$eval']) === 'string') {
+        try {
+          return evalExpr(obj['$eval'], params);
+        } catch (err) {
+          // Ignore error, and clone the $eval object as a signal
+        }
+      }
+
+      // Parameterize normal objects
       var clone = {};
       for(var k in obj) {
+        // Parameterize string
         var key = parameterizeString(k);
         if (typeof(key) !== 'string') {
           key = k;
         }
-        clone[key] = _.cloneDeep(obj[k], substitute);
+        // Parameterize value
+        var val = _.cloneDeep(obj[k], substitute);
+        if (val === undefined) {
+          continue; // Don't assign undefined, use it to delete properties
+        }
+        clone[key] = val;
       }
       return clone;
     }
