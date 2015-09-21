@@ -279,4 +279,30 @@ suite('parameterize', function() {
     assert.deepEqual(parameterize(input, params), output,
                      "Predicted output wasn't matched!");
   });
+
+  test("function as parameter", function() {
+    var input = {
+      value: [
+        {$eval: 'func(0)'},
+        {$eval: 'func(0)'},
+        {$eval: 'func(-1)'},
+        {$eval: 'func(-2)'},
+        {$eval: 'func(0)'},
+        {$eval: 'func(0)'},
+        {$eval: 'func(0)'},
+        {$eval: 'func(0)'},
+        {$eval: 'func(0)'},
+        {$eval: 'func(1+1)'}
+      ]
+    };
+    var i = 0;
+    var params = {
+      'func':  function(x) { i += 1; return x + i; }
+    };
+    var output = {
+      value: [1, 2, 2, 2, 5, 6, 7, 8, 9, 12]
+    };
+    assert.deepEqual(parameterize(input, params), output,
+                     "Predicted output wasn't matched!");
+  });
 });
