@@ -49,7 +49,11 @@ var evalExpr = function(expr, context) {
 
   // Throw error if it's not undefined
   if (error !== undefined) {
-    throw error;
+    var err = new Error("Error interpreting: `" + expression + "` got '" +
+                        error.toString() + "'");
+    err.expression = expr;
+    err.code = 'ParameterizationFailed';
+    throw err;
   }
 
   return result;
@@ -63,88 +67,96 @@ var parameterize = function(input, params) {
     // Otherwise treat ${,..} as string interpolations
     return str.replace(/\${([^}]*)}/g, function(originalText, expr) {
       try {
-        var result = evalExpr(expr, params);
-        if (result === undefined) {
-          return '';
+        var val = evalExpr(expr, params);
+        if (typeof(val) !== 'string' && typeof(val) !== 'number') {
+          var error = new Error("Can't substitute " + typeof(val) + " from " +
+                                "expression: `" + expr + "` into string: '" +
+                                str + "'");
+          error.expression = expr;
+          error.code = 'ParameterizationFailed';
+          throw error;
         }
+        return val;
       } catch (err) {
-        // Signal errors by returning originalText
-        return originalText;
+        err.construct = str;
+        throw err;
       }
     });
   };
 
-  // Substitute objects that needs this
-  var substitute = function(obj) {
+  // Create clone function
+  var clone = function(value) {
     // Parameterized strings
-    if (typeof(obj) === 'string') {
-      return parameterizeString(obj);
+    if (typeof(value) === 'string') {
+      return parameterizeString(value);
+    }
+
+    // Don't parameterize numbers and booleans
+    if (typeof(value) !== 'object') {
+      return value;
     }
 
     // Parameterize array entries
-    if (obj instanceof Array) {
+    if (value instanceof Array) {
       // Parameterize array and filter undefined entries
-      return _.cloneDeep(obj[k], substitute).filter(function(entry) {
+      return clone(value[k]).filter(function(entry) {
         return entry !== undefined;
       });
     }
 
-    // Parameterize keys of objects
-    if (typeof(obj) === 'object') {
-      // Handle if-constructs
-      if (typeof(obj['$if']) === 'string') {
-        try {
-          if (evalExpr(obj['$if'], params)) {
-            return _.cloneDeep(obj['then'], substitute);
-          } else {
-            return _.cloneDeep(obj['else'], substitute);
-          }
-        } catch (err) {
-          // Ignore error, and clone the $if object as a signal
+    // Handle if-constructs
+    if (typeof(value['$if']) === 'string') {
+      try {
+        if (evalExpr(value['$if'], params)) {
+          return clone(value['then']);
+        } else {
+          return clone(value['else']);
         }
+      } catch (err) {
+        err.construct = _.cloneDeep(value);
+        throw err;
       }
-      // Handle switch-constructs
-      if (typeof(obj['$switch']) === 'string') {
-        try {
-          var label = evalExpr(obj['$switch'], params);
-          return _.cloneDeep(obj[label], substitute);
-        } catch (err) {
-          // Ignore error, and clone the $switch object as a signal
-        }
+    }
+    // Handle switch-constructs
+    if (typeof(value['$switch']) === 'string') {
+      try {
+        var label = evalExpr(value['$switch'], params);
+        return clone(value[label]);
+      } catch (err) {
+        err.construct = _.cloneDeep(value);
+        throw err;
       }
-      // Handle eval-constructs
-      if (typeof(obj['$eval']) === 'string') {
-        try {
-          return evalExpr(obj['$eval'], params);
-        } catch (err) {
-          // Ignore error, and clone the $eval object as a signal
-        }
+    }
+    // Handle eval-constructs
+    if (typeof(value['$eval']) === 'string') {
+      try {
+        return evalExpr(value['$eval'], params);
+      } catch (err) {
+        err.construct = _.cloneDeep(value);
+        throw err;
       }
-
-      // Parameterize normal objects
-      var clone = {};
-      for(var k in obj) {
-        // Parameterize string
-        var key = parameterizeString(k);
-        if (typeof(key) !== 'string') {
-          key = k;
-        }
-        // Parameterize value
-        var val = _.cloneDeep(obj[k], substitute);
-        if (val === undefined) {
-          continue; // Don't assign undefined, use it to delete properties
-        }
-        clone[key] = val;
-      }
-      return clone;
     }
 
-    // Clone all other values as lodash normally would
-    return undefined;
+    // Parameterize normal objects, both keys and values
+    var result = {};
+    for(var k in value) {
+      // Parameterize string
+      var key = parameterizeString(k);
+      if (typeof(key) !== 'string') {
+        key = k;
+      }
+      // Parameterize value
+      var val = clone(value[k]);
+      if (val === undefined) {
+        continue; // Don't assign undefined, use it to delete properties
+      }
+      result[key] = val;
+    }
+    return result;
   };
 
-  // Create clone while substituting objects that need it
-  return _.cloneDeep(input, substitute);
+  // Create clone
+  return clone(input);
 };
 
 
