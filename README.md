@@ -10,8 +10,18 @@ library for substituting strings into JSON structures.
 var parameterize = require('json-parameterization');
 
 var input = {
-  "{{key-prefix}}Key":  "{{now}} ms",
-  "say":                "{{Hello World | to-lower }}"
+  "${key-prefix}Key":  "${now()} ms",
+  "say":               "${toLower('Hello World')}",
+  "tags":              {"$eval": 'myobj'},
+  "cond": {
+    "$if": 'value == 7',
+    "then": 'value is 7',
+    "else": 'value isnt 7',
+  },
+  "cond2": {
+    "$if": 'value != 7',
+    "then": 'value is not 7',
+  },
 };
 
 var params = {
@@ -19,9 +29,11 @@ var params = {
   'now':          function() {
                     return new Date().getTime();
                   },
-  'to-lower':     function(param) {
+  'toLower':      function(param) {
                     return param.toLowerCase();
-                  }
+                  },
+  'myobj':        {tag: 'value'},
+  'value':        7,
 };
 
 parameterize(input, params);
@@ -32,7 +44,10 @@ parameterize(input, params);
 ```js
 {
   timeKey:      "1411165317832 ms",
-  say:          "hello world"
+  say:          "hello world",
+  tags:         {tag: 'value'},
+  cond:         'value is 7',
+  // cond2 doesn't exist! because there is 'else' value for it
 }
 ```
 
