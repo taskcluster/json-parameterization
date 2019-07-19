@@ -30,23 +30,33 @@ var evalExpr = function(expr, context) {
   if (typeof(expr) !== 'string') {
     return expr;
   }
-  context = _.cloneDeep(context, function(value) {
-    if (typeof(value) === 'function') {
-      return value;
-    }
-    return undefined;
+  context = _.cloneDeep(context);
+  var result  = undefined;
+  var error   = undefined;
+  // Let's use two sandboxes for good measure
+  vm.runInNewContext("run()", {
+    run: function() {
+      try {
+        result = safeEval(expr, context);
+      } catch (err) {
+        error = err || null;
+      }
+    },
+  }, {
+    displayErrors:  false,
+    timeout:        500
   });
 
-  // Evaluate in a sand box
-  try {
-    return safeEval(expr, context);
-  } catch (err) {
+  // Throw error if it's not undefined
+  if (error !== undefined) {
     var err = new Error("Error interpreting: `" + expression + "` got '" +
                         error.toString() + "'");
     err.expression = expr;
     err.code = 'ParameterizationFailed';
     throw err;
   }
+
+  return result;
 };
 
 /** Parameterize input with params */
@@ -89,7 +99,7 @@ var parameterize = function(input, params) {
     // Parameterize array entries
     if (value instanceof Array) {
       // Parameterize array and filter undefined entries
-      return value.map(clone).filter(function(entry) {
+      return clone(value[k]).filter(function(entry) {
         return entry !== undefined;
       });
     }
@@ -145,26 +155,8 @@ var parameterize = function(input, params) {
     return result;
   };
 
-  // Let's use a top-level sandbox for good measure
-  var result, error;
-  vm.runInNewContext("run()", {
-    run: function() {
-      try {
-        // Create clone
-        result = clone(input);
-      } catch (err) {
-        error = err;
-      }
-    },
-  }, {
-    displayErrors:  false,
-    timeout:        500
-  });
-
-  if (error) {
-    throw error;
-  }
-  return result;
+  // Create clone
+  return clone(input);
 };
 
 
