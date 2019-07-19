@@ -1,6 +1,6 @@
 {
   "name": "json-parameterization",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Jonas Finnemann Jensen <jopsen@gmail.com>",
   "description": "Parameterization of JSON structures",
   "license": "MIT",
