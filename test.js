@@ -89,12 +89,11 @@ suite('parameterize', function() {
       param1:     {my: "dictionary"},
       param2:     [1,2,3,4],
     };
-    try {
-      parameterize(input, params);
-    } catch(err) {
-      return;
-    }
-    assert(false, "Expected an error");
+    var output = {
+      "{param1}":     [1,2,3,4],
+    };
+    assert.deepEqual(parameterize(input, params), output,
+                     "Predicted output wasn't matched!");
   });
 
   test("Modify string", function() {
@@ -130,151 +129,6 @@ suite('parameterize', function() {
     };
     var output = {
       SomeKey: 'Value'
-    };
-    assert.deepEqual(parameterize(input, params), output,
-                     "Predicted output wasn't matched!");
-  });
-
-  test("$if -> then", function() {
-    var input = {
-      value: {
-        $if:  'a > b',
-        then: "a is greater than b",
-        else: "a is less than or equal to b"
-      }
-    };
-    var params = {
-      a: 2,
-      b: 1
-    };
-    var output = {
-      value: "a is greater than b"
-    };
-    assert.deepEqual(parameterize(input, params), output,
-                     "Predicted output wasn't matched!");
-  });
-
-  test("$if -> else", function() {
-    var input = {
-      value: {
-        $if:  'a > b',
-        then: "a is greater than b",
-        else: "a is less than or equal to b"
-      }
-    };
-    var params = {
-      a: 1,
-      b: 2
-    };
-    var output = {
-      value: "a is less than or equal to b"
-    };
-    assert.deepEqual(parameterize(input, params), output,
-                     "Predicted output wasn't matched!");
-  });
-
-  test("Conditional property w. $if (true)", function() {
-    var input = {
-      value: {
-        $if:  'a > b',
-        then: "Value only if a > b",
-      }
-    };
-    var params = {
-      a: 2,
-      b: 1
-    };
-    var result = parameterize(input, params);
-    assert(result.hasOwnProperty('value'), "Expected value property");
-    var output = {
-      value: "Value only if a > b"
-    };
-    assert.deepEqual(result, output, "Predicted output wasn't matched!");
-  });
-
-  test("Conditional property w. $if (false)", function() {
-    var input = {
-      value: {
-        $if:  'a > b',
-        then: "Value only if a > b"
-      }
-    };
-    var params = {
-      a: 1,
-      b: 2
-    };
-    var result = parameterize(input, params);
-    assert(!result.hasOwnProperty('value'), "Expected no value property");
-    var output = {};
-    assert.deepEqual(result, output, "Predicted output wasn't matched!");
-  });
-
-  test("$if nested $eval", function() {
-    var input = {
-      value: {
-        $if:  'a > b',
-        then: {$eval: 'a + b'}
-      }
-    };
-    var params = {
-      a: 2,
-      b: 1
-    };
-    var output = {
-      value: 3
-    };
-    assert.deepEqual(parameterize(input, params), output,
-                     "Predicted output wasn't matched!");
-  });
-
-  test("$switch (matching case)", function() {
-    var input = {
-      value: {
-        $switch:  '"case" + a',
-        caseA:    "Got case A",
-        caseB:    "Got case B"
-      }
-    };
-    var params = {
-      a: "A"
-    };
-    var output = {
-      value: "Got case A"
-    };
-    assert.deepEqual(parameterize(input, params), output,
-                     "Predicted output wasn't matched!");
-  });
-
-  test("$switch (conditional)", function() {
-    var input = {
-      value: {
-        $switch: '"case" + a',
-      }
-    };
-    var params = {
-      a: "A"
-    };
-    var result = parameterize(input, params);
-    assert(!result.hasOwnProperty('value'), "Expected no value property");
-    var output = {};
-    assert.deepEqual(parameterize(input, params), output,
-                     "Predicted output wasn't matched!");
-  });
-
-  test("$switch nested $eval", function() {
-    var input = {
-      value: {
-        $switch:  '"case" + a',
-        caseA:    {$eval: 'a + b'},
-        caseB:    "Got case B"
-      }
-    };
-    var params = {
-      a: "A",
-      b: "B"
-    };
-    var output = {
-      value: "AB"
     };
     assert.deepEqual(parameterize(input, params), output,
                      "Predicted output wasn't matched!");
