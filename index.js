@@ -41,7 +41,7 @@ var evalExpr = function(expr, context) {
   try {
     return safeEval(expr, context);
   } catch (err) {
-    var err = new Error("Error interpreting: `" + expression + "` got '" +
+    var err = new Error("Error interpreting: `" + expr + "`: got '" +
                         error.toString() + "'");
     err.expression = expr;
     err.code = 'ParameterizationFailed';
