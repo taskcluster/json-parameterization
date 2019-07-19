@@ -22,149 +22,100 @@
 
 var _           = require('lodash');
 var debug       = require('debug')('json-parameterization');
-var safeEval    = require('notevil');
-var vm          = require('vm');
 
-/** Evaluate an expression in a given context, using two sand boxes :) */
-var evalExpr = function(expr, context) {
-  if (typeof(expr) !== 'string') {
-    return expr;
-  }
-  context = _.cloneDeep(context, function(value) {
-    if (typeof(value) === 'function') {
-      return value;
-    }
-    return undefined;
-  });
-
-  // Evaluate in a sand box
-  try {
-    return safeEval(expr, context);
-  } catch (err) {
-    var err = new Error("Error interpreting: `" + expr + "`: got '" +
-                        error.toString() + "'");
-    err.expression = expr;
-    err.code = 'ParameterizationFailed';
-    throw err;
-  }
-};
 
 /** Parameterize input with params */
 var parameterize = function(input, params) {
 
+  // Evaluate an expression
+  var evalExpr = function(expr, fallback) {
+    // Find parts of the expression
+    var parts = expr.split(/\|/);
+
+    var value = parts.shift();
+    // Check if first value is on a "string" format
+    var match = /\s*"([^"]*)"\s*|\s*'([^']*)'\s*/.exec(value);
+    if (match) {
+      value = match[1] || match[2] || '';
+    } else {
+      // Otherwise, trim and look up in parameters
+      var result = params[value.trim()];
+      if (result instanceof Function) {
+        // if it's a function then we call it, without parameters
+        value = result();
+      } else if (result !== undefined) {
+        // if it's defined we return the value substituted in
+        value = _.cloneDeep(result);
+      } else {
+        // If we didn't get a value, function or string
+        debug("Couldn't find parameter: '%s' used in '%s'",
+              value, expr);
+        return fallback;
+      }
+    }
+
+    // While there are parts of the expression remaining
+    while (parts.length > 0) {
+      // Find next part and trim it
+      var part = parts.shift().trim();
+      // Look up in params
+      var result = params[part];
+      if (result instanceof Function) {
+        // Modify value if we got a function
+        value = result(value);
+      } else {
+        // If we didn't get a function, then this is done
+        debug("Couldn't find modify: '%s' used in '%s'", part, expr);
+        return fallback;
+      }
+    }
+
+    // Return value
+    return value;
+  };
+
   // Parameterize a string
   var parameterizeString = function(str) {
-    // Otherwise treat ${,..} as string interpolations
-    return str.replace(/\${([^}]*)}/g, function(originalText, expr) {
-      try {
-        var val = evalExpr(expr, params);
-        if (typeof(val) !== 'string' && typeof(val) !== 'number') {
-          var error = new Error("Can't substitute " + typeof(val) + " from " +
-                                "expression: `" + expr + "` into string: '" +
-                                str + "'");
-          error.expression = expr;
-          error.code = 'ParameterizationFailed';
-          throw error;
-        }
-        return val;
-      } catch (err) {
-        err.construct = str;
-        throw err;
-      }
+    // Handle special case where the entire string is an expression
+    if (/^{{[^}]+}}$/.test(str)) {
+      return evalExpr(str.substr(2, str.length - 4), str);
+    }
+
+    // Otherwise treat {{...}} as string interpolations
+    return str.replace(/{{([^}]*)}}/g, function(originalText, expression) {
+      return evalExpr(expression, originalText);
     });
   };
 
-  // Create clone function
-  var clone = function(value) {
+  // Substitute objects that needs this
+  var substitute = function(obj) {
     // Parameterized strings
-    if (typeof(value) === 'string') {
-      return parameterizeString(value);
+    if (typeof(obj) == 'string') {
+      return parameterizeString(obj);
     }
 
-    // Don't parameterize numbers and booleans
-    if (typeof(value) !== 'object') {
-      return value;
-    }
-
-    // Parameterize array entries
-    if (value instanceof Array) {
-      // Parameterize array and filter undefined entries
-      return value.map(clone).filter(function(entry) {
-        return entry !== undefined;
-      });
-    }
-
-    // Handle if-constructs
-    if (typeof(value['$if']) === 'string') {
-      try {
-        if (evalExpr(value['$if'], params)) {
-          return clone(value['then']);
-        } else {
-          return clone(value['else']);
+    // Parameterize keys of objects
+    if (typeof(obj) == 'object') {
+      if (obj instanceof Array) {
+        return undefined;
+      }
+      var clone = {};
+      for(var k in obj) {
+        var key = parameterizeString(k);
+        if (typeof(key) !== 'string') {
+          key = k;
         }
-      } catch (err) {
-        err.construct = _.cloneDeep(value);
-        throw err;
+        clone[key] = _.cloneDeepWith(obj[k], substitute);
       }
-    }
-    // Handle switch-constructs
-    if (typeof(value['$switch']) === 'string') {
-      try {
-        var label = evalExpr(value['$switch'], params);
-        return clone(value[label]);
-      } catch (err) {
-        err.construct = _.cloneDeep(value);
-        throw err;
-      }
-    }
-    // Handle eval-constructs
-    if (typeof(value['$eval']) === 'string') {
-      try {
-        return evalExpr(value['$eval'], params);
-      } catch (err) {
-        err.construct = _.cloneDeep(value);
-        throw err;
-      }
+      return clone;
     }
 
-    // Parameterize normal objects, both keys and values
-    var result = {};
-    for(var k in value) {
-      // Parameterize string
-      var key = parameterizeString(k);
-      if (typeof(key) !== 'string') {
-        key = k;
-      }
-      // Parameterize value
-      var val = clone(value[k]);
-      if (val === undefined) {
-        continue; // Don't assign undefined, use it to delete properties
-      }
-      result[key] = val;
-    }
-    return result;
+    // Clone all other values as lodash normally would
+    return undefined;
   };
 
-  // Let's use a top-level sandbox for good measure
-  var result, error;
-  vm.runInNewContext("run()", {
-    run: function() {
-      try {
-        // Create clone
-        result = clone(input);
-      } catch (err) {
-        error = err;
-      }
-    },
-  }, {
-    displayErrors:  false,
-    timeout:        500
-  });
-
-  if (error) {
-    throw error;
-  }
-  return result;
+  // Create clone while substituting objects that need it
+  return _.cloneDeepWith(input, substitute);
 };
 
 

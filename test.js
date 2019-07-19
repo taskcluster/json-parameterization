@@ -14,10 +14,10 @@ suite('parameterize', function() {
 
   test("String extraction", function() {
     var input = {
-      key1:     "${'Hello World'}",
-      key2:     "${   'Hello World'   }",
-      key3:     "${\"Hello World\"}",
-      key4:     "${  \"Hello World\"   }"
+      key1:     "{{'Hello World'}}",
+      key2:     "{{   'Hello World'   }}",
+      key3:     "{{\"Hello World\"}}",
+      key4:     "{{  \"Hello World\"   }}"
     };
     var params = {};
     var output = {
@@ -32,8 +32,8 @@ suite('parameterize', function() {
 
   test("Substitute strings in", function() {
     var input = {
-      key1:       "${param1}",
-      key2:       "${param2}"
+      key1:       "{{param1}}",
+      key2:       "{{param2}}"
     };
     var params = {
       param1:     "PAR1",
@@ -49,8 +49,8 @@ suite('parameterize', function() {
 
   test("Substitute functions in", function() {
     var input = {
-      key1:       "${param1()}",
-      key2:       "${param2()}"
+      key1:       "{{param1}}",
+      key2:       "{{param2}}"
     };
     var params = {
       param1:     function() { return "PAR1"; },
@@ -66,8 +66,8 @@ suite('parameterize', function() {
 
   test("Substitute objects in", function() {
     var input = {
-      key1:       {$eval: "param1"},
-      key2:       {$eval: "param2"}
+      key1:       "{{param1}}",
+      key2:       "{{param2}}"
     };
     var params = {
       param1:     {my: "dictionary"},
@@ -83,34 +83,33 @@ suite('parameterize', function() {
 
   test("Substitute objects in key (doesn't work)", function() {
     var input = {
-      '${param1}':   {$eval: "param2"}
+      '{{param1}}':   "{{param2}}"
     };
     var params = {
       param1:     {my: "dictionary"},
       param2:     [1,2,3,4],
     };
-    try {
-      parameterize(input, params);
-    } catch(err) {
-      return;
-    }
-    assert(false, "Expected an error");
+    var output = {
+      "{{param1}}":     [1,2,3,4],
+    };
+    assert.deepEqual(parameterize(input, params), output,
+                     "Predicted output wasn't matched!");
   });
 
   test("Modify string", function() {
     var input = {
-      key1:     "${ toUpper( 'hello world') }",
-      key2:     "${  toLower(toUpper('hello world'))   }",
-      key3:     "${   toLower(  toUpper(  text))  }",
+      key1:     "{{'hello world' | to-upper}}",
+      key2:     "{{ 'hello world'   | to-upper   | to-lower  }}",
+      key3:     "{{   hi-var   | to-upper   |    to-lower  }}",
     };
     var params = {
-      toUpper: function(text) {
+      'to-upper': function(text) {
         return text.toUpperCase();
       },
-      toLower: function(text) {
+      'to-lower': function(text) {
         return text.toLowerCase();
       },
-      text: 'hello World'
+      'hi-var':   'hello World'
     };
     var output = {
       key1:     "HELLO WORLD",
@@ -123,184 +122,13 @@ suite('parameterize', function() {
 
   test("Substitute into a key", function() {
     var input = {
-      "${prefix}Key": "Value"
+      "{{prefix}}Key": "Value"
     };
     var params = {
       'prefix':     'Some'
     };
     var output = {
       SomeKey: 'Value'
-    };
-    assert.deepEqual(parameterize(input, params), output,
-                     "Predicted output wasn't matched!");
-  });
-
-  test("$if -> then", function() {
-    var input = {
-      value: {
-        $if:  'a > b',
-        then: "a is greater than b",
-        else: "a is less than or equal to b"
-      }
-    };
-    var params = {
-      a: 2,
-      b: 1
-    };
-    var output = {
-      value: "a is greater than b"
-    };
-    assert.deepEqual(parameterize(input, params), output,
-                     "Predicted output wasn't matched!");
-  });
-
-  test("$if -> else", function() {
-    var input = {
-      value: {
-        $if:  'a > b',
-        then: "a is greater than b",
-        else: "a is less than or equal to b"
-      }
-    };
-    var params = {
-      a: 1,
-      b: 2
-    };
-    var output = {
-      value: "a is less than or equal to b"
-    };
-    assert.deepEqual(parameterize(input, params), output,
-                     "Predicted output wasn't matched!");
-  });
-
-  test("Conditional property w. $if (true)", function() {
-    var input = {
-      value: {
-        $if:  'a > b',
-        then: "Value only if a > b",
-      }
-    };
-    var params = {
-      a: 2,
-      b: 1
-    };
-    var result = parameterize(input, params);
-    assert(result.hasOwnProperty('value'), "Expected value property");
-    var output = {
-      value: "Value only if a > b"
-    };
-    assert.deepEqual(result, output, "Predicted output wasn't matched!");
-  });
-
-  test("Conditional property w. $if (false)", function() {
-    var input = {
-      value: {
-        $if:  'a > b',
-        then: "Value only if a > b"
-      }
-    };
-    var params = {
-      a: 1,
-      b: 2
-    };
-    var result = parameterize(input, params);
-    assert(!result.hasOwnProperty('value'), "Expected no value property");
-    var output = {};
-    assert.deepEqual(result, output, "Predicted output wasn't matched!");
-  });
-
-  test("$if nested $eval", function() {
-    var input = {
-      value: {
-        $if:  'a > b',
-        then: {$eval: 'a + b'}
-      }
-    };
-    var params = {
-      a: 2,
-      b: 1
-    };
-    var output = {
-      value: 3
-    };
-    assert.deepEqual(parameterize(input, params), output,
-                     "Predicted output wasn't matched!");
-  });
-
-  test("$switch (matching case)", function() {
-    var input = {
-      value: {
-        $switch:  '"case" + a',
-        caseA:    "Got case A",
-        caseB:    "Got case B"
-      }
-    };
-    var params = {
-      a: "A"
-    };
-    var output = {
-      value: "Got case A"
-    };
-    assert.deepEqual(parameterize(input, params), output,
-                     "Predicted output wasn't matched!");
-  });
-
-  test("$switch (conditional)", function() {
-    var input = {
-      value: {
-        $switch: '"case" + a',
-      }
-    };
-    var params = {
-      a: "A"
-    };
-    var result = parameterize(input, params);
-    assert(!result.hasOwnProperty('value'), "Expected no value property");
-    var output = {};
-    assert.deepEqual(parameterize(input, params), output,
-                     "Predicted output wasn't matched!");
-  });
-
-  test("$switch nested $eval", function() {
-    var input = {
-      value: {
-        $switch:  '"case" + a',
-        caseA:    {$eval: 'a + b'},
-        caseB:    "Got case B"
-      }
-    };
-    var params = {
-      a: "A",
-      b: "B"
-    };
-    var output = {
-      value: "AB"
-    };
-    assert.deepEqual(parameterize(input, params), output,
-                     "Predicted output wasn't matched!");
-  });
-
-  test("function as parameter", function() {
-    var input = {
-      value: [
-        {$eval: 'func(0)'},
-        {$eval: 'func(0)'},
-        {$eval: 'func(-1)'},
-        {$eval: 'func(-2)'},
-        {$eval: 'func(0)'},
-        {$eval: 'func(0)'},
-        {$eval: 'func(0)'},
-        {$eval: 'func(0)'},
-        {$eval: 'func(0)'},
-        {$eval: 'func(1+1)'}
-      ]
-    };
-    var i = 0;
-    var params = {
-      'func':  function(x) { i += 1; return x + i; }
-    };
-    var output = {
-      value: [1, 2, 2, 2, 5, 6, 7, 8, 9, 12]
     };
     assert.deepEqual(parameterize(input, params), output,
                      "Predicted output wasn't matched!");
