@@ -105,7 +105,7 @@ var parameterize = function(input, params) {
         if (typeof(key) !== 'string') {
           key = k;
         }
-        clone[key] = _.cloneDeep(obj[k], substitute);
+        clone[key] = _.cloneDeepWith(obj[k], substitute);
       }
       return clone;
     }
@@ -115,7 +115,7 @@ var parameterize = function(input, params) {
   };
 
   // Create clone while substituting objects that need it
-  return _.cloneDeep(input, substitute);
+  return _.cloneDeepWith(input, substitute);
 };
 
 
